@@ -1,0 +1,1 @@
+sqlite3 silly_bot.sqlite .dump > sql/dump.sql

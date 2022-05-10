@@ -1,0 +1,59 @@
+name: Deploy to GKE
+
+on:
+  workflow_run:
+    workflows: ["Build image"]
+    types:
+      - completed
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT }}
+  GAR_LOCATION: europe-north1
+  GKE_CLUSTER: kindly-case
+  GKE_ZONE: europe-north1-a
+  DEPLOYMENT_NAME: chatbot-backend-deployment
+  REPOSITORY: kindly-case
+  IMAGE: chatbot-backend
+
+jobs:
+  deploy:
+    name: Deploy to GKE
+    runs-on: ubuntu-latest
+    environment: production
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    # Configure Workload Identity Federation and generate an access token.
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v0'
+      with:
+        token_format: 'access_token'
+        workload_identity_provider: 'projects/61848492826/locations/global/workloadIdentityPools/prod-pool/providers/github-provider'
+        service_account: 'gke-admin@kindly-case.iam.gserviceaccount.com'
+
+    # Get GKE credentials
+    - name: Set up GKE credentials
+      uses: google-github-actions/get-gke-credentials@v0
+      with:
+        cluster_name: ${{ env.GKE_CLUSTER }}
+        location: ${{ env.GKE_ZONE }}
+
+    # Set up kustomize
+    - name: Set up Kustomize
+      run: |-
+        curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
+        chmod u+x ./kustomize
+
+    # Deploy image to GKE cluster
+    - name: Deploy
+      run: |-
+        ./kustomize edit set image GAR_LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY/IMAGE=europe-north1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE:$GITHUB_SHA
+        ./kustomize build . | kubectl apply -f -
+        kubectl rollout status deployments/$DEPLOYMENT_NAME
+        kubectl get services -o wide

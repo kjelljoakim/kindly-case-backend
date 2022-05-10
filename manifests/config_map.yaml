@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chatbot-backend-configmap
+data:
+  feHost: "http://34.88.170.226"
+  dbUrl: "sqlite:///silly_bot.sqlite"
